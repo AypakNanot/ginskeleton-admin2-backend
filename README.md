@@ -32,7 +32,7 @@ GinSkeleton-Admin2 是一个基于 Go + Gin 框架开发的企业级后台管理
 
 - **多应用入口**: 支持后台管理系统 (web) 和门户 API 系统 (api) 独立部署
 - **完善的权限体系**: 基于 Casbin 的 RBAC 权限控制，支持菜单、按钮级别授权
-- **JWT 认证**: 支持 Token 刷新机制，可配置 Redis 缓存
+- **JWT 认证**: 支持 Token 刷新机制
 - **多数据库支持**: MySQL、SQL Server、PostgreSQL，支持读写分离
 - **日志系统**: 基于 Zap 的结构化日志，支持日志轮转
 - **WebSocket**: 内置 WebSocket 支持，可配置启动
@@ -54,7 +54,6 @@ GinSkeleton-Admin2 是一个基于 Go + Gin 框架开发的企业级后台管理
 | 验证码 | dchest/captcha v1.1.0 |
 | WebSocket | gorilla/websocket v1.5.3 |
 | 消息队列 | RabbitMQ (amqp091-go) |
-| 缓存 | Redis (gomodule/redigo) |
 | 雪花算法 | 自定义实现 |
 | 参数验证 | go-playground/validator/v10 |
 
@@ -129,7 +128,6 @@ ginskeleton-admin2-backend/
 
 - Go >= 1.24
 - MySQL >= 5.7 (推荐 8.0)
-- Redis >= 3.0 (可选，用于缓存 Token)
 - RabbitMQ (可选，用于消息队列)
 
 ### 安装步骤
@@ -589,8 +587,6 @@ func (v *ArticleCreateValidator) CheckParams(context *gin.Context) {
 | AppDebug | 调试模式开关 |
 | HttpServer | HTTP 服务器配置（端口、跨域、代理） |
 | Token | JWT Token 配置 |
-| LoginPolicy | 登录安全策略 |
-| Redis | Redis 配置 |
 | Logs | 日志配置 |
 | Websocket | WebSocket 配置 |
 | SnowFlake | 雪花算法配置 |
@@ -670,25 +666,11 @@ HttpServer:
     Port: ":22001"  # 修改此端口
 ```
 
-### Q2: 如何连接 Redis?
+### Q2: Token 缓存如何开启？
 
-编辑 `config/config.yml`:
-```yaml
-Redis:
-  Host: "127.0.0.1"
-  Port: 6379
-  Auth: "your_password"
-```
+Token 缓存功能已移除，所有 Token 数据直接存储在数据库中。
 
-### Q3: Token 缓存如何开启？
-
-编辑 `config/config.yml`:
-```yaml
-Token:
-  IsCacheToRedis: 1  # 1=开启，0=关闭
-```
-
-### Q4: 如何添加新的中间件？
+### Q3: 如何添加新的中间件？
 
 在 `app/http/middleware/` 目录创建中间件文件：
 
@@ -711,7 +693,7 @@ func Logger() gin.HandlerFunc {
 router.Use(logger.Logger())
 ```
 
-### Q5: 如何自定义日志格式？
+### Q3: 如何自定义日志格式？
 
 编辑 `config/config.yml`:
 ```yaml

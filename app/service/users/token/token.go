@@ -8,7 +8,6 @@ import (
 	"goskeleton/app/global/variable"
 	"goskeleton/app/http/middleware/my_jwt"
 	"goskeleton/app/model/users"
-	"goskeleton/app/service/users/token_cache_redis"
 	"time"
 )
 
@@ -23,10 +22,10 @@ type userToken struct {
 	userJwt *my_jwt.JwtSign
 }
 
-//GenerateToken 生成token
+//GenerateToken 生成 token
 func (u *userToken) GenerateToken(userid int64, username string, phone string, expireAt int64) (tokens string, err error) {
 
-	// 根据实际业务自定义token需要包含的参数，生成token，注意：用户密码请勿包含在token
+	// 根据实际业务自定义 token 需要包含的参数，生成 token，注意：用户密码请勿包含在 token
 	customClaims := my_jwt.CustomClaims{
 		UserId: userid,
 		Name:   username,
@@ -40,7 +39,7 @@ func (u *userToken) GenerateToken(userid int64, username string, phone string, e
 	return u.userJwt.CreateToken(customClaims)
 }
 
-// RecordLoginToken 用户login成功，记录用户token
+// RecordLoginToken 用户 login 成功，记录用户 token
 func (u *userToken) RecordLoginToken(userToken, clientIp string) bool {
 	if customClaims, err := u.userJwt.ParseToken(userToken); err == nil {
 		userId := customClaims.UserId
@@ -51,13 +50,13 @@ func (u *userToken) RecordLoginToken(userToken, clientIp string) bool {
 	}
 }
 
-//TokenIsMeetRefreshCondition 检查token是否满足刷新条件
+//TokenIsMeetRefreshCondition 检查 token 是否满足刷新条件
 func (u *userToken) TokenIsMeetRefreshCondition(token string) bool {
-	// token基本信息是否有效：1.过期时间在允许的过期范围内;2.基本格式正确
+	// token 基本信息是否有效：1.过期时间在允许的过期范围内;2.基本格式正确
 	customClaims, code := u.isNotExpired(token, variable.ConfigYml.GetInt64("Token.JwtTokenRefreshAllowSec"))
 	switch code {
 	case consts.JwtTokenOK, consts.JwtTokenExpired:
-		//在数据库的存储信息是否也符合过期刷新刷新条件
+		// 在数据库的存储信息是否也符合过期刷新刷新条件
 		if users.CreateUserFactory("").OauthRefreshConditionCheck(customClaims.UserId, token) {
 			return true
 		}
@@ -65,10 +64,10 @@ func (u *userToken) TokenIsMeetRefreshCondition(token string) bool {
 	return false
 }
 
-// RefreshToken 刷新token的有效期（默认+3600秒，参见常量配置项）
+// RefreshToken 刷新 token 的有效期（默认 +3600 秒，参见常量配置项）
 func (u *userToken) RefreshToken(oldToken, clientIp string) (newToken string, res bool) {
 	var err error
-	//如果token是有效的、后者在在过期时间内，那么执行更新，换取新token
+	// 如果 token 是有效的、后者在在过期时间内，那么执行更新，换取新 token
 	if newToken, err = u.userJwt.RefreshToken(oldToken, variable.ConfigYml.GetInt64("Token.JwtTokenRefreshExpireAt")); err == nil {
 		if customClaims, err := u.userJwt.ParseToken(newToken); err == nil {
 			userId := customClaims.UserId
@@ -82,41 +81,31 @@ func (u *userToken) RefreshToken(oldToken, clientIp string) (newToken string, re
 	return "", false
 }
 
-// 判断token本身是否未过期
+// 判断 token 本身是否未过期
 // 参数解释：
-// token： 待处理的token值
-// expireAtSec： 过期时间延长的秒数，主要用于用户刷新token时，判断是否在延长的时间范围内，非刷新逻辑默认为0
+// token： 待处理的 token 值
+// expireAtSec：过期时间延长的秒数，主要用于用户刷新 token 时，判断是否在延长的时间范围内，非刷新逻辑默认为 0
 func (u *userToken) isNotExpired(token string, expireAtSec int64) (*my_jwt.CustomClaims, int) {
 	if customClaims, err := u.userJwt.ParseToken(token); err == nil {
 
 		if time.Now().Unix()-(customClaims.ExpiresAt+expireAtSec) < 0 {
-			// token有效
+			// token 有效
 			return customClaims, consts.JwtTokenOK
 		} else {
-			// 过期的token
+			// 过期的 token
 			return customClaims, consts.JwtTokenExpired
 		}
 	} else {
-		// 无效的token
+		// 无效的 token
 		return nil, consts.JwtTokenInvalid
 	}
 }
 
-// IsEffective 判断token是否有效（未过期+数据库用户信息正常）
+// IsEffective 判断 token 是否有效（未过期 + 数据库用户信息正常）
 func (u *userToken) IsEffective(token string) bool {
 	customClaims, code := u.isNotExpired(token, 0)
 	if consts.JwtTokenOK == code {
-		//1.首先在redis检测是否存在某个用户对应的有效token，如果存在就直接返回，不再继续查询mysql，否则最后查询mysql逻辑，确保万无一失
-		if variable.ConfigYml.GetInt("Token.IsCacheToRedis") == 1 {
-			tokenRedisFact := token_cache_redis.CreateUsersTokenCacheFactory(customClaims.UserId)
-			if tokenRedisFact != nil {
-				defer tokenRedisFact.ReleaseRedisConn()
-				if tokenRedisFact.TokenCacheIsExists(token) {
-					return true
-				}
-			}
-		}
-		//2.token符合token本身的规则以后，继续在数据库校验是不是符合本系统其他设置，例如：一个用户默认只允许10个账号同时在线（10个token同时有效）
+		// token 符合 token 本身的规则以后，继续在数据库校验是不是符合本系统其他设置，例如：一个用户默认只允许 10 个账号同时在线（10 个 token 同时有效）
 		if users.CreateUserFactory("").OauthCheckTokenIsOk(customClaims.UserId, token) {
 			return true
 		}
@@ -133,7 +122,7 @@ func (u *userToken) ParseToken(tokenStr string) (CustomClaims my_jwt.CustomClaim
 	}
 }
 
-// DestroyToken 销毁token，基本用不到，因为一个网站的用户退出都是直接关闭浏览器窗口，极少有户会点击“注销、退出”等按钮，销毁token其实无多大意义
+// DestroyToken 销毁 token，基本用不到，因为一个网站的用户退出都是直接关闭浏览器窗口，极少有户会点击"注销、退出"等按钮，销毁 token 其实无多大意义
 func (u *userToken) DestroyToken() {
 
 }
